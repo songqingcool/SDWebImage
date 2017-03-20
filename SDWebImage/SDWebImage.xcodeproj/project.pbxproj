@@ -89,10 +89,6 @@
 		E92BB5691E0E4A55006B63D5 /* SDWebImageTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SDWebImageTests.m; sourceTree = "<group>"; };
 		E92BB56B1E0E4A55006B63D5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E92BB57A1E0E4AD9006B63D5 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../../README.md; sourceTree = "<group>"; };
-		E92BB57E1E0E5272006B63D5 /* HowToUse.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = HowToUse.md; sourceTree = "<group>"; };
-		E92BB57F1E0E5272006B63D5 /* ManualInstallation.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = ManualInstallation.md; sourceTree = "<group>"; };
-		E92BB5801E0E5272006B63D5 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		E92BB5811E0E5272006B63D5 /* SDWebImage-4.0-Migration-guide.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = "SDWebImage-4.0-Migration-guide.md"; sourceTree = "<group>"; };
 		E92BB5841E0E5272006B63D5 /* FLAnimatedImageView+WebCache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "FLAnimatedImageView+WebCache.h"; sourceTree = "<group>"; };
 		E92BB5851E0E5272006B63D5 /* FLAnimatedImageView+WebCache.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "FLAnimatedImageView+WebCache.m"; sourceTree = "<group>"; };
 		E92BB5861E0E5272006B63D5 /* MKAnnotationView+WebCache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "MKAnnotationView+WebCache.h"; sourceTree = "<group>"; };
@@ -181,7 +177,6 @@
 			isa = PBXGroup;
 			children = (
 				E92BB5DA1E0E5599006B63D5 /* FLAnimatedImage */,
-				E92BB57D1E0E5272006B63D5 /* doc */,
 				E92BB5821E0E5272006B63D5 /* SDWebImage */,
 				E92BB55E1E0E4A55006B63D5 /* SDWebImage.h */,
 				E92BB55F1E0E4A55006B63D5 /* Info.plist */,
@@ -197,17 +192,6 @@
 				E92BB56B1E0E4A55006B63D5 /* Info.plist */,
 			);
 			path = SDWebImageTests;
-			sourceTree = "<group>";
-		};
-		E92BB57D1E0E5272006B63D5 /* doc */ = {
-			isa = PBXGroup;
-			children = (
-				E92BB57E1E0E5272006B63D5 /* HowToUse.md */,
-				E92BB57F1E0E5272006B63D5 /* ManualInstallation.md */,
-				E92BB5801E0E5272006B63D5 /* README.md */,
-				E92BB5811E0E5272006B63D5 /* SDWebImage-4.0-Migration-guide.md */,
-			);
-			path = doc;
 			sourceTree = "<group>";
 		};
 		E92BB5821E0E5272006B63D5 /* SDWebImage */ = {
@@ -671,6 +655,7 @@
 				E92BB5711E0E4A55006B63D5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		E92BB5721E0E4A55006B63D5 /* Build configuration list for PBXNativeTarget "SDWebImageTests" */ = {
 			isa = XCConfigurationList;
@@ -679,6 +664,7 @@
 				E92BB5741E0E4A55006B63D5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		E92BB5761E0E4AB7006B63D5 /* Build configuration list for PBXAggregateTarget "SDWebImageAgg" */ = {
 			isa = XCConfigurationList;
@@ -687,6 +673,7 @@
 				E92BB5781E0E4AB7006B63D5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
