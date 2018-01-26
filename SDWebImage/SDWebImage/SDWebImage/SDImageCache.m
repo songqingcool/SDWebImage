@@ -7,37 +7,9 @@
  */
 
 #import "SDImageCache.h"
-#import "SDWebImageDecoder.h"
-#import "UIImage+MultiFormat.h"
 #import <CommonCrypto/CommonDigest.h>
-#import "UIImage+GIF.h"
-#import "NSData+ImageContentType.h"
 #import "NSImage+WebCache.h"
-
-// See https://github.com/rs/SDWebImage/pull/1141 for discussion
-@interface AutoPurgeCache : NSCache
-@end
-
-@implementation AutoPurgeCache
-
-- (nonnull instancetype)init {
-    self = [super init];
-    if (self) {
-#if SD_UIKIT
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(removeAllObjects) name:UIApplicationDidReceiveMemoryWarningNotification object:nil];
-#endif
-    }
-    return self;
-}
-
-- (void)dealloc {
-#if SD_UIKIT
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidReceiveMemoryWarningNotification object:nil];
-#endif
-}
-
-@end
-
+#import "SDWebImageCodersManager.h"
 
 FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 #if SD_MAC
@@ -53,7 +25,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 @property (strong, nonatomic, nonnull) NSCache *memCache;
 @property (strong, nonatomic, nonnull) NSString *diskCachePath;
 @property (strong, nonatomic, nullable) NSMutableArray<NSString *> *customPaths;
-@property (SDDispatchQueueSetterSementics, nonatomic, nullable) dispatch_queue_t ioQueue;
+@property (strong, nonatomic, nullable) dispatch_queue_t ioQueue;
 
 @end
 
@@ -93,7 +65,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         _config = [[SDImageCacheConfig alloc] init];
         
         // Init the memory cache
-        _memCache = [[AutoPurgeCache alloc] init];
+        _memCache = [[NSCache alloc] init];
         _memCache.name = fullNamespace;
 
         // Init the disk cache
@@ -132,7 +104,6 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    SDDispatchQueueRelease(_ioQueue);
 }
 
 - (void)checkIfQueueIsIOQueue {
@@ -171,10 +142,11 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     }
     unsigned char r[CC_MD5_DIGEST_LENGTH];
     CC_MD5(str, (CC_LONG)strlen(str), r);
+    NSURL *keyURL = [NSURL URLWithString:key];
+    NSString *ext = keyURL ? keyURL.pathExtension : key.pathExtension;
     NSString *filename = [NSString stringWithFormat:@"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%@",
                           r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10],
-                          r[11], r[12], r[13], r[14], r[15], [key.pathExtension isEqualToString:@""] ? @"" : [NSString stringWithFormat:@".%@", key.pathExtension]];
-
+                          r[11], r[12], r[13], r[14], r[15], ext.length == 0 ? @"" : [NSString stringWithFormat:@".%@", ext]];
     return filename;
 }
 
@@ -220,9 +192,15 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
             @autoreleasepool {
                 NSData *data = imageData;
                 if (!data && image) {
-                    SDImageFormat imageFormatFromData = [NSData sd_imageFormatForImageData:data];
-                    data = [image sd_imageDataAsFormat:imageFormatFromData];
-                }                
+                    // If we do not have any data to detect image format, check whether it contains alpha channel to use PNG or JPEG format
+                    SDImageFormat format;
+                    if (SDCGImageRefContainsAlpha(image.CGImage)) {
+                        format = SDImageFormatPNG;
+                    } else {
+                        format = SDImageFormatJPEG;
+                    }
+                    data = [[SDWebImageCodersManager sharedInstance] encodedDataWithImage:image format:format];
+                }
                 [self storeImageDataToDisk:data forKey:key];
             }
             
@@ -311,14 +289,14 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
 - (nullable NSData *)diskImageDataBySearchingAllPathsForKey:(nullable NSString *)key {
     NSString *defaultPath = [self defaultCachePathForKey:key];
-    NSData *data = [NSData dataWithContentsOfFile:defaultPath];
+    NSData *data = [NSData dataWithContentsOfFile:defaultPath options:self.config.diskCacheReadingOptions error:nil];
     if (data) {
         return data;
     }
 
     // fallback because of https://github.com/rs/SDWebImage/pull/976 that added the extension to the disk file name
     // checking the key with and without the extension
-    data = [NSData dataWithContentsOfFile:defaultPath.stringByDeletingPathExtension];
+    data = [NSData dataWithContentsOfFile:defaultPath.stringByDeletingPathExtension options:self.config.diskCacheReadingOptions error:nil];
     if (data) {
         return data;
     }
@@ -326,14 +304,14 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     NSArray<NSString *> *customPaths = [self.customPaths copy];
     for (NSString *path in customPaths) {
         NSString *filePath = [self cachePathForKey:key inPath:path];
-        NSData *imageData = [NSData dataWithContentsOfFile:filePath];
+        NSData *imageData = [NSData dataWithContentsOfFile:filePath options:self.config.diskCacheReadingOptions error:nil];
         if (imageData) {
             return imageData;
         }
 
         // fallback because of https://github.com/rs/SDWebImage/pull/976 that added the extension to the disk file name
         // checking the key with and without the extension
-        imageData = [NSData dataWithContentsOfFile:filePath.stringByDeletingPathExtension];
+        imageData = [NSData dataWithContentsOfFile:filePath.stringByDeletingPathExtension options:self.config.diskCacheReadingOptions error:nil];
         if (imageData) {
             return imageData;
         }
@@ -344,17 +322,15 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
 - (nullable UIImage *)diskImageForKey:(nullable NSString *)key {
     NSData *data = [self diskImageDataBySearchingAllPathsForKey:key];
+    return [self diskImageForKey:key data:data];
+}
+
+- (nullable UIImage *)diskImageForKey:(nullable NSString *)key data:(nullable NSData *)data {
     if (data) {
-        UIImage *image = [UIImage sd_imageWithData:data];
+        UIImage *image = [[SDWebImageCodersManager sharedInstance] decodedImageWithData:data];
         image = [self scaledImageForKey:key image:image];
-#ifdef SD_WEBP
-        SDImageFormat imageFormat = [NSData sd_imageFormatForImageData:data];
-        if (imageFormat == SDImageFormatWebP) {
-            return image;
-        }
-#endif
         if (self.config.shouldDecompressImages) {
-            image = [UIImage decodedImageWithImage:image];
+            image = [[SDWebImageCodersManager sharedInstance] decompressedImageWithImage:image data:&data options:@{SDWebImageCoderScaleDownLargeImagesKey: @(NO)}];
         }
         return image;
     } else {
@@ -366,50 +342,65 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     return SDScaledImageForKey(key, image);
 }
 
-- (nullable NSOperation *)queryCacheOperationForKey:(nullable NSString *)key done:(nullable SDCacheQueryCompletedBlock)doneBlock {
+- (NSOperation *)queryCacheOperationForKey:(NSString *)key done:(SDCacheQueryCompletedBlock)doneBlock {
+    return [self queryCacheOperationForKey:key options:0 done:doneBlock];
+}
+
+- (nullable NSOperation *)queryCacheOperationForKey:(nullable NSString *)key options:(SDImageCacheOptions)options done:(nullable SDCacheQueryCompletedBlock)doneBlock {
     if (!key) {
         if (doneBlock) {
             doneBlock(nil, nil, SDImageCacheTypeNone);
         }
         return nil;
     }
-
+    
     // First check the in-memory cache...
     UIImage *image = [self imageFromMemoryCacheForKey:key];
-    if (image) {
-        NSData *diskData = nil;
-        if ([image isGIF]) {
-            diskData = [self diskImageDataBySearchingAllPathsForKey:key];
-        }
+    BOOL shouldQueryMemoryOnly = (options & SDImageCacheQueryMemoryOnly) || (image && !(options & SDImageCacheQueryDataWhenInMemory));
+    if (shouldQueryMemoryOnly) {
         if (doneBlock) {
-            doneBlock(image, diskData, SDImageCacheTypeMemory);
+            doneBlock(image, nil, SDImageCacheTypeMemory);
         }
         return nil;
     }
-
+    
     NSOperation *operation = [NSOperation new];
-    dispatch_async(self.ioQueue, ^{
+    void(^queryDiskBlock)(void) =  ^{
         if (operation.isCancelled) {
             // do not call the completion if cancelled
             return;
         }
-
+        
         @autoreleasepool {
             NSData *diskData = [self diskImageDataBySearchingAllPathsForKey:key];
-            UIImage *diskImage = [self diskImageForKey:key];
-            if (diskImage && self.config.shouldCacheImagesInMemory) {
-                NSUInteger cost = SDCacheCostForImage(diskImage);
-                [self.memCache setObject:diskImage forKey:key cost:cost];
+            UIImage *diskImage = image;
+            if (!diskImage && diskData) {
+                // decode image data only if in-memory cache missed
+                diskImage = [self diskImageForKey:key data:diskData];
+                if (diskImage && self.config.shouldCacheImagesInMemory) {
+                    NSUInteger cost = SDCacheCostForImage(diskImage);
+                    [self.memCache setObject:diskImage forKey:key cost:cost];
+                }
             }
-
+            
             if (doneBlock) {
-                dispatch_async(dispatch_get_main_queue(), ^{
+                if (options & SDImageCacheQueryDiskSync) {
                     doneBlock(diskImage, diskData, SDImageCacheTypeDisk);
-                });
+                } else {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        doneBlock(diskImage, diskData, SDImageCacheTypeDisk);
+                    });
+                }
             }
         }
-    });
-
+    };
+    
+    if (options & SDImageCacheQueryDiskSync) {
+        queryDiskBlock();
+    } else {
+        dispatch_async(self.ioQueue, queryDiskBlock);
+    }
+    
     return operation;
 }
 
@@ -597,7 +588,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         NSDirectoryEnumerator *fileEnumerator = [_fileManager enumeratorAtPath:self.diskCachePath];
         for (NSString *fileName in fileEnumerator) {
             NSString *filePath = [self.diskCachePath stringByAppendingPathComponent:fileName];
-            NSDictionary<NSString *, id> *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil];
+            NSDictionary<NSString *, id> *attrs = [_fileManager attributesOfItemAtPath:filePath error:nil];
             size += [attrs fileSize];
         }
     });
